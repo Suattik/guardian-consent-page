@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="referrer" content="no-referrer">
+<title>Elternfreigabe</title>
+<style>
+:root{color-scheme:light}
+*{box-sizing:border-box}body{margin:0;background:#f6f9f7;color:#253b32;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}main{max-width:650px;margin:0 auto;padding:28px 18px 48px}.card{background:#fff;border:1px solid #dce7e1;border-radius:22px;padding:24px;box-shadow:0 8px 28px rgba(20,55,40,.06)}.brand{display:flex;align-items:center;gap:12px;margin-bottom:16px}.logo{width:46px;height:46px;border-radius:14px;background:#eaf7f0;display:grid;place-items:center;font-size:24px}.pill{display:inline-block;padding:5px 9px;border-radius:99px;background:#eaf7f0;color:#267747;font-size:13px;font-weight:700}h1{font-size:28px;line-height:1.15;margin:10px 0 12px;color:#214a39}h2{font-size:19px;margin:22px 0 8px}p,li{line-height:1.55}.muted{font-size:13px;color:#6b7b74}.info{background:#f6faf8;border-radius:14px;padding:14px 16px;margin:14px 0}.check{display:flex;gap:10px;align-items:flex-start;margin:15px 0}.check input{margin-top:4px;width:20px;height:20px}.check label{margin:0;font-weight:500;line-height:1.45}label{display:block;margin:14px 0 6px;font-weight:700}input[type=password]{width:100%;padding:14px;border:1px solid #aebdb6;border-radius:12px;font-size:19px;letter-spacing:4px;background:#fff}button{width:100%;border:0;border-radius:13px;padding:15px;background:#267747;color:#fff;font-size:17px;font-weight:800;margin-top:8px}.error{background:#fff0f0;color:#9d3030;padding:12px;border-radius:10px;margin:12px 0}.ok{background:#edf8f1;color:#267747;padding:15px;border-radius:12px;font-weight:800;line-height:1.5}#form{display:none}ul{padding-left:21px}.footer{font-size:12px;color:#788780;text-align:center;margin-top:18px}
+</style>
+</head>
+<body>
+<main>
+  <div class="card">
+    <div class="brand"><div class="logo">👪</div><div><span class="pill">Geschützter Elternbereich</span></div></div>
+    <h1>Elternfreigabe</h1>
+    <div id="status">Freigabe wird sicher geprüft …</div>
+    <div id="form">
+      <div class="info"><strong id="childName"></strong> möchte die Lern-App nutzen. Die Anfrage wurde an <strong id="guardianEmail"></strong> gesendet.</div>
+      <h2>Wichtige Datenhinweise</h2>
+      <ul>
+        <li>Kontodaten, Klasse, Lernziel und Lernfortschritt</li>
+        <li>Geburtsdatum ausschließlich zur Altersprüfung</li>
+        <li>Cloud-Synchronisierung des Lernstands</li>
+        <li>Eingaben an den KI-Lerncoach zur Erzeugung von Antworten</li>
+      </ul>
+      <div class="check"><input id="guardian" type="checkbox"><label for="guardian">Ich bestätige, dass ich erziehungsberechtigt bin bzw. die erforderliche elterliche Verantwortung habe.</label></div>
+      <div class="check"><input id="consent" type="checkbox"><label for="consent">Ich habe die Hinweise gelesen und erlaube die Nutzung der Lern-App.</label></div>
+      <label for="pin">6-stelligen Eltern-PIN festlegen</label>
+      <input id="pin" type="password" inputmode="numeric" maxlength="6" autocomplete="new-password">
+      <label for="pin2">Eltern-PIN wiederholen</label>
+      <input id="pin2" type="password" inputmode="numeric" maxlength="6" autocomplete="new-password">
+      <p class="muted">Der PIN wird nicht im Klartext gespeichert. Er schützt spätere Elternaktionen, z. B. die Kontolöschung eines Unter-16-Kontos.</p>
+      <div id="error" class="error" style="display:none"></div>
+      <button id="approve">Nutzung freigeben</button>
+    </div>
+  </div>
+  <div class="footer">Elternfreigabe für die Lern-App · sichere Verarbeitung über Supabase</div>
+</main>
+<script>
+const query = new URLSearchParams(location.search);
+const consentToken = query.get('consent') || '';
+const hash = new URLSearchParams(location.hash.replace(/^#/,''));
+const accessToken = hash.get('access_token') || '';
+const statusEl = document.getElementById('status');
+const form = document.getElementById('form');
+const err = document.getElementById('error');
+const endpoint = 'https://smgkrunbcyghmynwessx.supabase.co/functions/v1/guardian-consent';
+
+async function call(action, extra={}) {
+  const r = await fetch(endpoint, {
+    method:'POST',
+    headers:{'Content-Type':'application/json','Authorization':'Bearer '+accessToken},
+    body:JSON.stringify({action, consentToken, ...extra})
+  });
+  const d = await r.json().catch(()=>({}));
+  if (!r.ok) throw new Error(d.message || d.error || 'Freigabe nicht möglich');
+  return d;
+}
+
+(async()=>{
+  if (!consentToken) {
+    statusEl.innerHTML='<div class="error">Der Freigabelink ist unvollständig. Bitte fordere in der App eine neue Elternfreigabe an.</div>';
+    return;
+  }
+  if (!accessToken) {
+    statusEl.innerHTML='<div class="error">Der E-Mail-Link ist unvollständig oder abgelaufen. Bitte fordere in der App eine neue Elternfreigabe an.</div>';
+    return;
+  }
+  try {
+    const d = await call('inspect');
+    if (d.status === 'approved') {
+      statusEl.innerHTML='<div class="ok">Die Nutzung ist bereits freigegeben. Dieses Fenster kann geschlossen werden.</div>';
+      return;
+    }
+    document.getElementById('childName').textContent = d.childName || 'Das Kind';
+    document.getElementById('guardianEmail').textContent = d.guardianEmail || '';
+    statusEl.style.display='none';
+    form.style.display='block';
+  } catch(e) {
+    statusEl.innerHTML='<div class="error">'+String(e.message)+'</div>';
+  }
+})();
+
+document.getElementById('approve').onclick = async()=>{
+  err.style.display='none';
+  const pin = document.getElementById('pin').value;
+  const pin2 = document.getElementById('pin2').value;
+  if (!document.getElementById('guardian').checked || !document.getElementById('consent').checked) {
+    err.textContent='Bitte bestätige beide Erklärungen.'; err.style.display='block'; return;
+  }
+  if (!/^\d{6}$/.test(pin)) {
+    err.textContent='Der Eltern-PIN muss genau 6 Ziffern haben.'; err.style.display='block'; return;
+  }
+  if (pin !== pin2) {
+    err.textContent='Die beiden PIN-Eingaben stimmen nicht überein.'; err.style.display='block'; return;
+  }
+  try {
+    await call('approve',{pin,guardianConfirmed:true,consentConfirmed:true});
+    form.innerHTML='<div class="ok">Freigabe erfolgreich gespeichert. In der Schüler-App kann jetzt auf „Status prüfen“ getippt werden.</div>';
+    history.replaceState(null,'',location.pathname);
+  } catch(e) {
+    err.textContent=String(e.message); err.style.display='block';
+  }
+};
+</script>
+</body>
+</html>
