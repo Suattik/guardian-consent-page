@@ -4,43 +4,116 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="referrer" content="no-referrer">
-<title>Elternfreigabe · Schlaupfad</title>
-<style>
-*{box-sizing:border-box}body{margin:0;background:#f6f9f7;color:#30483e;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}main{max-width:650px;margin:0 auto;padding:35px 18px 60px}.card{background:#fff;border:1px solid #dce7e1;border-radius:24px;padding:28px;box-shadow:0 8px 28px rgba(20,55,40,.06)}.logo{width:58px;height:58px;border-radius:17px;background:#eaf7f0;display:grid;place-items:center;font-size:29px}.pill{display:inline-block;margin-top:15px;padding:6px 11px;border-radius:99px;background:#eaf7f0;color:#267747;font-weight:700}h1{margin:18px 0 12px;color:#214a39;font-size:32px}p{line-height:1.55}.info{background:#f1f8f4;border-radius:15px;padding:16px;margin:18px 0}button{width:100%;border:0;border-radius:15px;padding:16px;background:#267747;color:#fff;font-size:18px;font-weight:800}button:disabled{opacity:.55}.ok{background:#edf8f1;color:#267747;border-radius:15px;padding:17px;font-weight:800;line-height:1.5}.error{background:#fff0f0;color:#9d3030;border-radius:15px;padding:17px;line-height:1.5}.muted{color:#75867e;font-size:14px}.footer{color:#788780;text-align:center;font-size:12px;margin-top:20px}
-</style>
+<meta name="robots" content="noindex,nofollow">
+<title>Einladung · Lernumo</title>
+<link rel="stylesheet" href="styles.css">
 </head>
 <body>
 <main>
-<div class="card">
-<div class="logo">👪</div>
-<span class="pill">Geschützter Elternbereich</span>
-<h1>Elternfreigabe</h1>
-<div id="content">
-<p>Mit dieser Freigabe bestätigst du einmalig die Nutzung von Schlaupfad für das Kinderkonto.</p>
-<div class="info"><strong>Wichtig:</strong><br>Dieser Link dient ausschließlich der Elternfreigabe. Er erstellt kein Elternkonto, ist kein Passwort und öffnet kein Elterndashboard.</div>
-<button id="approve">Elternfreigabe bestätigen</button>
-<p class="muted">Ein Zugang zum Elterndashboard wird später separat über eine Einladung des Kindes eingerichtet.</p>
-</div>
-</div>
-<div class="footer">Schlaupfad · sichere Elternfreigabe</div>
+  <div class="card">
+    <div class="logo" aria-hidden="true">👪</div>
+    <span class="pill">Einladung für Eltern</span>
+    <h1 id="title">Einladung wird geprüft …</h1>
+    <div id="content" aria-live="polite"></div>
+  </div>
+  <div class="footer">Lernumo · sichere Eltern-Einladung</div>
 </main>
 <script>
-const params=new URLSearchParams(location.search);
-const consentToken=params.get('consent')||'';
-const endpoint='https://smgkrunbcyghmynwessx.supabase.co/functions/v1/guardian-consent';
-const content=document.getElementById('content');
-const button=document.getElementById('approve');
-if(!consentToken){content.innerHTML='<div class="error">Der Freigabelink ist unvollständig. Bitte fordere in Schlaupfad eine neue Elternfreigabe an.</div>'}
-button?.addEventListener('click',async()=>{
-  button.disabled=true;button.textContent='Freigabe wird bestätigt …';
-  try{
-    const response=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'approve_from_link',consentToken})});
-    const data=await response.json().catch(()=>({}));
-    if(!response.ok)throw new Error(data.message||data.error||'Die Elternfreigabe konnte nicht bestätigt werden.');
-    history.replaceState(null,'',location.pathname);
-    content.innerHTML='<div class="ok">✓ Elternfreigabe erfolgreich bestätigt.</div><div class="info"><strong>Fertig.</strong><br>Du kannst dieses Fenster jetzt schließen. Das Kinderkonto kann die Freigabe in Schlaupfad übernehmen.</div>';
-  }catch(e){button.disabled=false;button.textContent='Noch einmal versuchen';const old=document.getElementById('errorBox');if(old)old.remove();const box=document.createElement('div');box.id='errorBox';box.className='error';box.style.marginTop='15px';box.textContent=String(e.message||e);content.appendChild(box)}
-});
+(function () {
+  'use strict';
+  var endpoint = 'https://hgnodunvurreehadpdab.supabase.co/functions/v1/parent-invite';
+  var params = new URLSearchParams(location.search);
+  var token = (params.get('invite') || '').trim();
+  var titleEl = document.getElementById('title');
+  var content = document.getElementById('content');
+
+  function el(tag, className, text) {
+    var node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text !== undefined) node.textContent = text;
+    return node;
+  }
+  function show(title, nodes) {
+    titleEl.textContent = title;
+    content.replaceChildren.apply(content, nodes);
+  }
+  function fail(title, message) {
+    show(title, [el('div', 'error', message)]);
+  }
+
+  // Links aus älteren Nachrichten (früheres Freigabe-Verfahren mit PIN).
+  if (params.has('legacy') || params.has('consent')) {
+    fail('Dieser Link stammt aus einer älteren Version',
+      'Die Elternfreigabe funktioniert jetzt anders: Das Kind erstellt in Lernumo eine neue Einladung, ' +
+      'und du legst dein eigenes Elternkonto an. Bitte das Kind, unter „Eltern einladen“ eine neue Einladung zu senden.');
+    return;
+  }
+
+  // Kein Token in der Adresse: der Link wurde gekürzt oder ohne Parameter geöffnet.
+  if (!token) {
+    fail('Einladung nicht vollständig',
+      'In der Adresse fehlt der Einladungscode. Öffne den Link erneut direkt aus der Nachricht ' +
+      '(nicht aus einer Vorschau) oder bitte das Kind, die Einladung erneut zu senden.');
+    return;
+  }
+
+  function renderInstructions() {
+    var code = el('div', 'code', token);
+    var copy = el('button', '', 'Code kopieren');
+    copy.type = 'button';
+    copy.addEventListener('click', function () {
+      var done = function () { copy.textContent = 'Kopiert ✓'; };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(token).then(done, function () { selectCode(); });
+      } else { selectCode(); }
+    });
+    function selectCode() {
+      var range = document.createRange();
+      range.selectNodeContents(code);
+      var selection = getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+      copy.textContent = 'Code markiert – jetzt kopieren';
+    }
+    var steps = el('ol', 'steps');
+    ['Installiere und öffne die Lernumo-App.',
+     'Tippe auf „Elternzugang“ und dann auf „Einladung annehmen“.',
+     'Füge den Code ein (oder den kompletten Link) und lege dein eigenes Elternkonto mit deiner E-Mail-Adresse an.',
+     'Bestätige die Einladung. Danach siehst du den Lernfortschritt im Eltern-Dashboard.'
+    ].forEach(function (text) { steps.appendChild(el('li', '', text)); });
+    return [
+      el('p', '', 'Dein Einladungscode:'), code, copy, steps,
+      el('div', 'info', 'Der Code gilt einmal und 7 Tage. Du brauchst dafür keine bestimmte E-Mail-Adresse und keinen PIN. Gib den Code nicht an Dritte weiter.')
+    ];
+  }
+
+  fetch(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'preview', token: token })
+  }).then(function (response) {
+    return response.json().catch(function () { return {}; });
+  }).then(function (data) {
+    if (data.state === 'pending') {
+      var name = data.childName || 'Dein Kind';
+      show(name + ' lädt dich zu Lernumo ein', renderInstructions());
+    } else if (data.state === 'expired') {
+      fail('Einladung abgelaufen', data.message);
+    } else if (data.state === 'used') {
+      fail('Einladung bereits verwendet', data.message);
+    } else if (data.state === 'revoked') {
+      fail('Einladung zurückgezogen', data.message);
+    } else {
+      fail('Einladung nicht gefunden', data.message ||
+        'Diese Einladung ist unbekannt. Bitte den Link erneut aus der neuesten Nachricht öffnen.');
+    }
+  }).catch(function () {
+    // Kein Netz: Der Code ist trotzdem gültig und kann in der App eingegeben werden.
+    show('Keine Verbindung', [
+      el('div', 'error', 'Die Einladung konnte gerade nicht geprüft werden. Der Code kann trotzdem in der App verwendet werden.')
+    ].concat(renderInstructions()));
+  });
+})();
 </script>
 </body>
 </html>
